@@ -5,6 +5,7 @@ import 'models/usuario.dart';
 import 'models/grupo.dart';
 import 'models/horario.dart';
 import 'models/trabajo.dart';
+import 'models/tarea.dart';
 
 class DBHelper {
   static Database? _db;
@@ -16,15 +17,15 @@ class DBHelper {
     final path = join(dbPath, 'utsc_teams.db');
     _db = await openDatabase(
       path,
-      version: 2,
+      version: 3,              // ⬅️ subimos versión
       onCreate: _onCreate,
-      // onUpgrade: _onUpgrade, // <- si en el futuro cambias el esquema, define esto
+      onUpgrade: _onUpgrade,   // ⬅️ migración
     );
     await _seed();
   }
 
   static Future _onCreate(Database db, int version) async {
-    // Carreras y Semestres
+    // Carreras
     await db.execute('''
       CREATE TABLE carreras(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +33,7 @@ class DBHelper {
       )
     ''');
 
+    // Semestres
     await db.execute('''
       CREATE TABLE semestres(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,43 +68,75 @@ class DBHelper {
       CREATE TABLE horarios(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         grupo_id INTEGER NOT NULL,
-        dia TEXT NOT NULL,         -- Lun, Mar, Mie, ...
+        dia TEXT NOT NULL,
         materia TEXT NOT NULL,
-        hora_inicio TEXT NOT NULL, -- "08:00"
-        hora_fin TEXT NOT NULL,    -- "09:30"
+        hora_inicio TEXT NOT NULL,
+        hora_fin TEXT NOT NULL,
         maestro_id INTEGER NOT NULL
       )
     ''');
-
-    // Índices para acelerar consultas de horarios
     await db.execute('CREATE INDEX IF NOT EXISTS idx_horarios_grupo   ON horarios(grupo_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_horarios_maestro ON horarios(maestro_id)');
 
-    // Trabajos
+    // Tareas (nueva)
+    await db.execute('''
+      CREATE TABLE tareas(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titulo TEXT NOT NULL,
+        descripcion TEXT,
+        grupo_id INTEGER NOT NULL,
+        maestro_id INTEGER NOT NULL,
+        fecha_entrega TEXT
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tareas_grupo ON tareas(grupo_id)');
+
+    // Trabajos = entregas ligadas a tarea_id (puede ser null si viene de versión vieja)
     await db.execute('''
       CREATE TABLE trabajos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         titulo TEXT NOT NULL,
         descripcion TEXT,
-        archivo_path TEXT,         -- ruta local
+        archivo_path TEXT,
         grupo_id INTEGER NOT NULL,
         estudiante_id INTEGER NOT NULL,
         maestro_id INTEGER NOT NULL,
+        tarea_id INTEGER,
         calificacion REAL,
         retroalimentacion TEXT
       )
     ''');
   }
 
-  // static Future _onUpgrade(Database db, int oldV, int newV) async {
-  //   // Aquí pondrías migraciones si cambias el esquema en el futuro.
-  // }
+  static Future _onUpgrade(Database db, int oldV, int newV) async {
+    if (oldV < 3) {
+      // Crear tabla tareas si no existe
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS tareas(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          titulo TEXT NOT NULL,
+          descripcion TEXT,
+          grupo_id INTEGER NOT NULL,
+          maestro_id INTEGER NOT NULL,
+          fecha_entrega TEXT
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_tareas_grupo ON tareas(grupo_id)');
+
+      // Agregar columna tarea_id a trabajos si no existe
+      final cols = await db.rawQuery("PRAGMA table_info(trabajos)");
+      final hasTareaId = cols.any((c) => (c['name'] as String) == 'tarea_id');
+      if (!hasTareaId) {
+        await db.execute('ALTER TABLE trabajos ADD COLUMN tarea_id INTEGER');
+      }
+    }
+  }
 
   static Future _seed() async {
     final db = _db!;
     final uCount = Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM usuarios'),
-        ) ?? 0;
+      await db.rawQuery('SELECT COUNT(*) FROM usuarios'),
+    ) ?? 0;
 
     if (uCount == 0) {
       // Carreras & Semestres
@@ -133,7 +167,7 @@ class DBHelper {
         'grupo_id': null
       });
 
-      // Estudiantes (tus seeds)
+      // Estudiantes
       final alumnoId = await db.insert('usuarios', {
         'nombre': 'Enrique Fabian Perez Medellin',
         'email': '21024@virtual.utsc.edu.mx',
@@ -141,7 +175,6 @@ class DBHelper {
         'rol': 'estudiante',
         'grupo_id': gId
       });
-
       await db.insert('usuarios', {
         'nombre': 'Paul Eduardo Torres Hernandez',
         'email': '18167@virtual.utsc.edu.mx',
@@ -149,7 +182,6 @@ class DBHelper {
         'rol': 'estudiante',
         'grupo_id': gId
       });
-
       await db.insert('usuarios', {
         'nombre': 'Enthan Andres Vazquez Vazquez',
         'email': '16246@virtual.utsc.edu.mx',
@@ -176,14 +208,24 @@ class DBHelper {
         'maestro_id': maestroId
       });
 
-      // Trabajo demo (sin calificar) para el primer alumno
+      // Tarea demo (publicada por el maestro para el grupo)
+      final tareaId = await db.insert('tareas', Tarea(
+        titulo: 'Proyecto 1',
+        descripcion: 'Sube tu Word/PDF',
+        grupoId: gId,
+        maestroId: maestroId,
+        fechaEntrega: null,
+      ).toMap());
+
+      // Entrega demo (del primer alumno) ligada a la tarea
       await db.insert('trabajos', {
         'titulo': 'Proyecto 1',
-        'descripcion': 'Sube tu Word/PDF',
+        'descripcion': 'Mi entrega',
         'archivo_path': null,
         'grupo_id': gId,
         'estudiante_id': alumnoId,
         'maestro_id': maestroId,
+        'tarea_id': tareaId,
         'calificacion': null,
         'retroalimentacion': null
       });
@@ -195,15 +237,14 @@ class DBHelper {
   // ===================== AUTH =====================
   Future<Map<String, dynamic>?> _firstRow(
       String table, String where, List args) async {
-    final res =
-        await _db!.query(table, where: where, whereArgs: args, limit: 1);
+    final res = await _db!.query(table, where: where, whereArgs: args, limit: 1);
     if (res.isEmpty) return null;
     return res.first;
   }
 
   Future<Usuario?> loginUser(String email, String pass) async {
     final row =
-        await _firstRow('usuarios', 'email=? AND password=?', [email, pass]);
+    await _firstRow('usuarios', 'email=? AND password=?', [email, pass]);
     if (row == null) return null;
     return Usuario.fromMap(row);
   }
@@ -213,11 +254,9 @@ class DBHelper {
       _db!.insert('usuarios', u.toMap());
 
   Future<int> updateUsuario(Usuario u) async => _db!.update(
-        'usuarios',
-        u.toMap(),
-        where: 'id=?',
-        whereArgs: [u.id],
-      );
+    'usuarios', u.toMap(),
+    where: 'id=?', whereArgs: [u.id],
+  );
 
   Future<int> deleteUsuario(int id) async =>
       _db!.delete('usuarios', where: 'id=?', whereArgs: [id]);
@@ -226,7 +265,7 @@ class DBHelper {
     final res = (rol == null)
         ? await _db!.query('usuarios', orderBy: 'id DESC')
         : await _db!.query('usuarios',
-            where: 'rol=?', whereArgs: [rol], orderBy: 'id DESC');
+        where: 'rol=?', whereArgs: [rol], orderBy: 'id DESC');
     return res.map(Usuario.fromMap).toList();
   }
 
@@ -235,11 +274,9 @@ class DBHelper {
       _db!.insert('carreras', {'nombre': nombre});
 
   Future<int> updateCarrera(int id, String nombre) async => _db!.update(
-        'carreras',
-        {'nombre': nombre},
-        where: 'id=?',
-        whereArgs: [id],
-      );
+    'carreras', {'nombre': nombre},
+    where: 'id=?', whereArgs: [id],
+  );
 
   Future<int> deleteCarrera(int id) async =>
       _db!.delete('carreras', where: 'id=?', whereArgs: [id]);
@@ -252,11 +289,9 @@ class DBHelper {
       _db!.insert('semestres', {'nombre': nombre});
 
   Future<int> updateSemestre(int id, String nombre) async => _db!.update(
-        'semestres',
-        {'nombre': nombre},
-        where: 'id=?',
-        whereArgs: [id],
-      );
+    'semestres', {'nombre': nombre},
+    where: 'id=?', whereArgs: [id],
+  );
 
   Future<int> deleteSemestre(int id) async =>
       _db!.delete('semestres', where: 'id=?', whereArgs: [id]);
@@ -273,7 +308,7 @@ class DBHelper {
       });
 
   Future<int> updateGrupo(
-          int id, String nombre, int carreraId, int semestreId) async =>
+      int id, String nombre, int carreraId, int semestreId) async =>
       _db!.update(
         'grupos',
         {
@@ -302,34 +337,25 @@ class DBHelper {
       _db!.insert('horarios', h.toMap());
 
   Future<int> updateHorario(Horario h) async => _db!.update(
-        'horarios',
-        h.toMap(),
-        where: 'id=?',
-        whereArgs: [h.id],
-      );
+      'horarios', h.toMap(), where: 'id=?', whereArgs: [h.id]);
 
   Future<int> deleteHorario(int id) async =>
       _db!.delete('horarios', where: 'id=?', whereArgs: [id]);
 
   Future<List<Horario>> horariosPorGrupo(int grupoId) async {
     final res = await _db!.query('horarios',
-        where: 'grupo_id=?',
-        whereArgs: [grupoId],
-        orderBy: 'dia, hora_inicio');
+        where: 'grupo_id=?', whereArgs: [grupoId], orderBy: 'dia, hora_inicio');
     return res.map(Horario.fromMap).toList();
   }
 
   Future<List<Horario>> horariosPorMaestro(int maestroId) async {
     final res = await _db!.query('horarios',
-        where: 'maestro_id=?',
-        whereArgs: [maestroId],
-        orderBy: 'dia, hora_inicio');
+        where: 'maestro_id=?', whereArgs: [maestroId], orderBy: 'dia, hora_inicio');
     return res.map(Horario.fromMap).toList();
   }
 
-  // Detallados (para mostrar nombres en UI)
-  Future<List<Map<String, dynamic>>> horariosDetalladosPorGrupo(
-          int grupoId) =>
+  // Detallados
+  Future<List<Map<String, dynamic>>> horariosDetalladosPorGrupo(int grupoId) =>
       _db!.rawQuery('''
         SELECT h.*, u.nombre AS maestro_nombre
         FROM horarios h
@@ -338,8 +364,7 @@ class DBHelper {
         ORDER BY h.dia, h.hora_inicio
       ''', [grupoId]);
 
-  Future<List<Map<String, dynamic>>> horariosDetalladosPorMaestro(
-          int maestroId) =>
+  Future<List<Map<String, dynamic>>> horariosDetalladosPorMaestro(int maestroId) =>
       _db!.rawQuery('''
         SELECT h.*, g.nombre AS grupo_nombre
         FROM horarios h
@@ -348,12 +373,25 @@ class DBHelper {
         ORDER BY h.dia, h.hora_inicio
       ''', [maestroId]);
 
-  // ===================== TRABAJOS =====================
-  Future<int> insertTrabajo(Trabajo t) async =>
-      _db!.insert('trabajos', t.toMap());
+  // ===================== TAREAS =====================
+  Future<int> createTarea(Tarea t) async => _db!.insert('tareas', t.toMap());
 
-  Future<int> calificarTrabajo(int trabajoId, String calificacion,
-          {String? feedback}) async =>
+  Future<List<Tarea>> getTareasPorGrupo(int grupoId) async {
+    final res = await _db!
+        .query('tareas', where: 'grupo_id=?', whereArgs: [grupoId], orderBy: 'id DESC');
+    return res.map(Tarea.fromMap).toList();
+  }
+
+  Future<List<Tarea>> getTareasPorMaestro(int maestroId) async {
+    final res = await _db!.query('tareas',
+        where: 'maestro_id=?', whereArgs: [maestroId], orderBy: 'id DESC');
+    return res.map(Tarea.fromMap).toList();
+  }
+
+  // ===================== ENTREGAS (TRABAJOS) =====================
+  Future<int> insertTrabajo(Trabajo t) async => _db!.insert('trabajos', t.toMap());
+
+  Future<int> calificarTrabajo(int trabajoId, String calificacion, {String? feedback}) async =>
       _db!.update(
         'trabajos',
         {
@@ -382,6 +420,17 @@ class DBHelper {
       WHERE t.maestro_id = ?
       ORDER BY t.id DESC
     ''', [maestroId]);
+    return res.map(Trabajo.fromMapWithStudent).toList();
+  }
+
+  Future<List<Trabajo>> getEntregasPorTarea(int tareaId) async {
+    final res = await _db!.rawQuery('''
+      SELECT t.*, u.nombre AS estudiante_nombre
+      FROM trabajos t
+      JOIN usuarios u ON u.id = t.estudiante_id
+      WHERE t.tarea_id = ?
+      ORDER BY t.id DESC
+    ''', [tareaId]);
     return res.map(Trabajo.fromMapWithStudent).toList();
   }
 }

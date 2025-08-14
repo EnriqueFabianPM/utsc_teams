@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../database/models/usuario.dart';
-import 'subir_trabajo.dart';
 import 'horario_estudiante.dart';
 import 'calificaciones_estudiante.dart';
+import 'tareas_estudiante.dart';
 
 class EstudianteHome extends StatelessWidget {
   final Usuario user;
@@ -32,25 +32,27 @@ class EstudianteHome extends StatelessWidget {
             leading: const Icon(Icons.schedule),
             title: const Text("Ver horario del grupo"),
             enabled: !noGroup,
-            onTap: noGroup ? null
+            onTap: noGroup
+                ? null
                 : () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => HorarioEstudiante(user: user),
-                      ),
-                    ),
+              context,
+              MaterialPageRoute(
+                builder: (_) => HorarioEstudiante(user: user),
+              ),
+            ),
           ),
           ListTile(
-            leading: const Icon(Icons.upload_file),
-            title: const Text("Subir trabajo (Word/PDF)"),
+            leading: const Icon(Icons.assignment),
+            title: const Text("Tareas del grupo"),
             enabled: !noGroup,
-            onTap: noGroup ? null
+            onTap: noGroup
+                ? null
                 : () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SubirTrabajo(estudiante: user),
-                      ),
-                    ),
+              context,
+              MaterialPageRoute(
+                builder: (_) => TareasEstudiante(alumno: user),
+              ),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.grade),
