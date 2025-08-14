@@ -5,8 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 
 class FileService {
-  /// Abre el diálogo y permite seleccionar doc/docx/pdf.
-  /// Devuelve la ruta temporal elegida, o null si se cancela.
+  /// Selecciona .doc/.docx/.pdf y devuelve la ruta original elegida.
   Future<String?> pickDocument() async {
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -17,33 +16,19 @@ class FileService {
     return res.files.single.path;
   }
 
-  /// Copia el archivo a la carpeta de documentos de la app.
-  /// Devuelve la NUEVA ruta copiada (recomendada para guardar en la BD).
-  Future<String> saveCopyToAppDir(String originalPath) async {
+  /// Copia el archivo a /Documents de la app y devuelve la nueva ruta.
+  Future<String> saveCopyToAppDir(String sourcePath) async {
     final dir = await getApplicationDocumentsDirectory();
-    final fileName = p.basename(originalPath);
-    final dstPath = p.join(dir.path, 'entregas', fileName);
-
-    final dstDir = Directory(p.dirname(dstPath));
-    if (!await dstDir.exists()) {
-      await dstDir.create(recursive: true);
-    }
-
-    final srcFile = File(originalPath);
-    final newFile = await srcFile.copy(dstPath);
-    return newFile.path;
+    final name = p.basename(sourcePath);
+    final safeName = name.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+    final dest = p.join(dir.path, 'entregas', safeName);
+    await Directory(p.dirname(dest)).create(recursive: true);
+    await File(sourcePath).copy(dest);
+    return dest;
   }
 
-  /// Intenta abrir el archivo con una app instalada (Word, lector PDF, etc.)
+  /// Abre un archivo con la app del sistema.
   Future<void> openFile(String path) async {
     await OpenFilex.open(path);
-  }
-
-  /// Borra un archivo del storage de la app (opcional para limpiar).
-  Future<void> deleteLocal(String path) async {
-    final f = File(path);
-    if (await f.exists()) {
-      await f.delete();
-    }
   }
 }

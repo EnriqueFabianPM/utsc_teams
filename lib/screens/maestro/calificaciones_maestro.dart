@@ -11,7 +11,8 @@ class CalificacionesMaestro extends StatefulWidget {
   State<CalificacionesMaestro> createState() => _CalificacionesMaestroState();
 }
 
-class _CalificacionesMaestroState extends State<CalificacionesMaestro> with SingleTickerProviderStateMixin {
+class _CalificacionesMaestroState extends State<CalificacionesMaestro>
+    with SingleTickerProviderStateMixin {
   late TabController _tab;
   final DBHelper _db = DBHelper();
 
@@ -32,38 +33,63 @@ class _CalificacionesMaestroState extends State<CalificacionesMaestro> with Sing
   }
 
   void _editar(Trabajo t) async {
-    final gradeCtrl = TextEditingController(text: t.calificacion?.toStringAsFixed(1) ?? '');
+    final gradeCtrl =
+        TextEditingController(text: t.calificacion?.toStringAsFixed(1) ?? '');
     final fbCtrl = TextEditingController(text: t.retroalimentacion ?? '');
     final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Editar calificación • ${t.titulo}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: gradeCtrl, decoration: const InputDecoration(labelText: 'Calificación (0–100)'), keyboardType: TextInputType.number),
-            TextField(controller: fbCtrl, decoration: const InputDecoration(labelText: 'Feedback')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Guardar')),
-        ],
-      ),
-    ) ?? false;
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text('Editar calificación • ${t.titulo}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: gradeCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'Calificación (0–100)'),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                    controller: fbCtrl,
+                    decoration:
+                        const InputDecoration(labelText: 'Feedback')),
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Guardar')),
+            ],
+          ),
+        ) ??
+        false;
 
     if (!ok) return;
 
-    await _db.calificarTrabajo(t.id!, gradeCtrl.text, feedback: fbCtrl.text);
-    setState(() {}); // refresca listas
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Calificación actualizada')));
+    final grade = double.tryParse(gradeCtrl.text.trim());
+    if (grade == null || grade < 0 || grade > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa una calificación válida (0–100)')),
+      );
+      return;
+    }
+
+    _db.calificarTrabajo(t.id!, grade.toString(), feedback: fbCtrl.text.trim());
+    setState(() {}); // refresca
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Calificación actualizada')));
   }
 
   Widget _list(Future<List<Trabajo>> future) {
     return FutureBuilder(
       future: future,
       builder: (_, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
         final items = snap.data as List<Trabajo>;
         if (items.isEmpty) return const Center(child: Text('Nada por aquí'));
         return ListView.separated(
@@ -73,12 +99,21 @@ class _CalificacionesMaestroState extends State<CalificacionesMaestro> with Sing
             final t = items[i];
             return ListTile(
               title: Text(t.titulo),
-              subtitle: Text('Alumno: ${t.estudianteNombre ?? t.estudianteId} • Grupo ${t.grupoId}'),
+              subtitle: Text(
+                  'Alumno: ${t.estudianteNombre ?? t.estudianteId} • Grupo ${t.grupoId}'),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(t.calificacion == null ? '—' : t.calificacion!.toStringAsFixed(1),
-                      style: TextStyle(fontWeight: FontWeight.bold, color: t.calificacion == null ? Colors.grey : Colors.green)),
+                  Text(
+                    t.calificacion == null
+                        ? '—'
+                        : t.calificacion!.toStringAsFixed(1),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color:
+                          t.calificacion == null ? Colors.grey : Colors.green,
+                    ),
+                  ),
                   if ((t.retroalimentacion ?? '').isNotEmpty)
                     const Text('Con feedback', style: TextStyle(fontSize: 11)),
                 ],

@@ -14,7 +14,12 @@ class DBHelper {
     if (_db != null) return;
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'utsc_teams.db');
-    _db = await openDatabase(path, version: 2, onCreate: _onCreate);
+    _db = await openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      // onUpgrade: _onUpgrade, // <- si en el futuro cambias el esquema, define esto
+    );
     await _seed();
   }
 
@@ -69,6 +74,10 @@ class DBHelper {
       )
     ''');
 
+    // Índices para acelerar consultas de horarios
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_horarios_grupo   ON horarios(grupo_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_horarios_maestro ON horarios(maestro_id)');
+
     // Trabajos
     await db.execute('''
       CREATE TABLE trabajos(
@@ -85,12 +94,15 @@ class DBHelper {
     ''');
   }
 
+  // static Future _onUpgrade(Database db, int oldV, int newV) async {
+  //   // Aquí pondrías migraciones si cambias el esquema en el futuro.
+  // }
+
   static Future _seed() async {
     final db = _db!;
     final uCount = Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM usuarios'),
-        ) ??
-        0;
+        ) ?? 0;
 
     if (uCount == 0) {
       // Carreras & Semestres
@@ -98,11 +110,11 @@ class DBHelper {
       final semId = await db.insert('semestres', {'nombre': '2025-A'});
 
       // Grupo demo
-      final gId = await db.insert('grupos', {
-        'nombre': 'DSM03A',
-        'carrera_id': carId,
-        'semestre_id': semId,
-      });
+      final gId = await db.insert('grupos', Grupo(
+        nombre: '9-A',
+        carreraId: carId,
+        semestreId: semId,
+      ).toMap());
 
       // Usuarios demo
       final maestroId = await db.insert('usuarios', {
@@ -121,10 +133,27 @@ class DBHelper {
         'grupo_id': null
       });
 
+      // Estudiantes (tus seeds)
       final alumnoId = await db.insert('usuarios', {
-        'nombre': 'Ana Alumna',
-        'email': 'ana@demo',
-        'password': '123',
+        'nombre': 'Enrique Fabian Perez Medellin',
+        'email': '21024@virtual.utsc.edu.mx',
+        'password': '21024',
+        'rol': 'estudiante',
+        'grupo_id': gId
+      });
+
+      await db.insert('usuarios', {
+        'nombre': 'Paul Eduardo Torres Hernandez',
+        'email': '18167@virtual.utsc.edu.mx',
+        'password': '18167',
+        'rol': 'estudiante',
+        'grupo_id': gId
+      });
+
+      await db.insert('usuarios', {
+        'nombre': 'Enthan Andres Vazquez Vazquez',
+        'email': '16246@virtual.utsc.edu.mx',
+        'password': '16246',
         'rol': 'estudiante',
         'grupo_id': gId
       });
@@ -147,7 +176,7 @@ class DBHelper {
         'maestro_id': maestroId
       });
 
-      // Trabajo demo (sin calificar)
+      // Trabajo demo (sin calificar) para el primer alumno
       await db.insert('trabajos', {
         'titulo': 'Proyecto 1',
         'descripcion': 'Sube tu Word/PDF',
@@ -166,7 +195,8 @@ class DBHelper {
   // ===================== AUTH =====================
   Future<Map<String, dynamic>?> _firstRow(
       String table, String where, List args) async {
-    final res = await _db!.query(table, where: where, whereArgs: args, limit: 1);
+    final res =
+        await _db!.query(table, where: where, whereArgs: args, limit: 1);
     if (res.isEmpty) return null;
     return res.first;
   }
@@ -182,9 +212,12 @@ class DBHelper {
   Future<int> createUsuario(Usuario u) async =>
       _db!.insert('usuarios', u.toMap());
 
-  Future<int> updateUsuario(Usuario u) async => _db!.update('usuarios',
-      u.toMap(),
-      where: 'id=?', whereArgs: [u.id]);
+  Future<int> updateUsuario(Usuario u) async => _db!.update(
+        'usuarios',
+        u.toMap(),
+        where: 'id=?',
+        whereArgs: [u.id],
+      );
 
   Future<int> deleteUsuario(int id) async =>
       _db!.delete('usuarios', where: 'id=?', whereArgs: [id]);
@@ -192,8 +225,8 @@ class DBHelper {
   Future<List<Usuario>> getUsuarios({String? rol}) async {
     final res = (rol == null)
         ? await _db!.query('usuarios', orderBy: 'id DESC')
-        : await _db!
-            .query('usuarios', where: 'rol=?', whereArgs: [rol], orderBy: 'id DESC');
+        : await _db!.query('usuarios',
+            where: 'rol=?', whereArgs: [rol], orderBy: 'id DESC');
     return res.map(Usuario.fromMap).toList();
   }
 
@@ -202,8 +235,11 @@ class DBHelper {
       _db!.insert('carreras', {'nombre': nombre});
 
   Future<int> updateCarrera(int id, String nombre) async => _db!.update(
-      'carreras', {'nombre': nombre},
-      where: 'id=?', whereArgs: [id]);
+        'carreras',
+        {'nombre': nombre},
+        where: 'id=?',
+        whereArgs: [id],
+      );
 
   Future<int> deleteCarrera(int id) async =>
       _db!.delete('carreras', where: 'id=?', whereArgs: [id]);
@@ -216,8 +252,11 @@ class DBHelper {
       _db!.insert('semestres', {'nombre': nombre});
 
   Future<int> updateSemestre(int id, String nombre) async => _db!.update(
-      'semestres', {'nombre': nombre},
-      where: 'id=?', whereArgs: [id]);
+        'semestres',
+        {'nombre': nombre},
+        where: 'id=?',
+        whereArgs: [id],
+      );
 
   Future<int> deleteSemestre(int id) async =>
       _db!.delete('semestres', where: 'id=?', whereArgs: [id]);
@@ -230,20 +269,21 @@ class DBHelper {
       _db!.insert('grupos', {
         'nombre': nombre,
         'carrera_id': carreraId,
-        'semestre_id': semestreId
+        'semestre_id': semestreId,
       });
 
   Future<int> updateGrupo(
           int id, String nombre, int carreraId, int semestreId) async =>
       _db!.update(
-          'grupos',
-          {
-            'nombre': nombre,
-            'carrera_id': carreraId,
-            'semestre_id': semestreId
-          },
-          where: 'id=?',
-          whereArgs: [id]);
+        'grupos',
+        {
+          'nombre': nombre,
+          'carrera_id': carreraId,
+          'semestre_id': semestreId,
+        },
+        where: 'id=?',
+        whereArgs: [id],
+      );
 
   Future<int> deleteGrupo(int id) async =>
       _db!.delete('grupos', where: 'id=?', whereArgs: [id]);
@@ -262,23 +302,51 @@ class DBHelper {
       _db!.insert('horarios', h.toMap());
 
   Future<int> updateHorario(Horario h) async => _db!.update(
-      'horarios', h.toMap(),
-      where: 'id=?', whereArgs: [h.id]);
+        'horarios',
+        h.toMap(),
+        where: 'id=?',
+        whereArgs: [h.id],
+      );
 
   Future<int> deleteHorario(int id) async =>
       _db!.delete('horarios', where: 'id=?', whereArgs: [id]);
 
   Future<List<Horario>> horariosPorGrupo(int grupoId) async {
     final res = await _db!.query('horarios',
-        where: 'grupo_id=?', whereArgs: [grupoId], orderBy: 'dia, hora_inicio');
+        where: 'grupo_id=?',
+        whereArgs: [grupoId],
+        orderBy: 'dia, hora_inicio');
     return res.map(Horario.fromMap).toList();
   }
 
   Future<List<Horario>> horariosPorMaestro(int maestroId) async {
     final res = await _db!.query('horarios',
-        where: 'maestro_id=?', whereArgs: [maestroId], orderBy: 'dia, hora_inicio');
+        where: 'maestro_id=?',
+        whereArgs: [maestroId],
+        orderBy: 'dia, hora_inicio');
     return res.map(Horario.fromMap).toList();
   }
+
+  // Detallados (para mostrar nombres en UI)
+  Future<List<Map<String, dynamic>>> horariosDetalladosPorGrupo(
+          int grupoId) =>
+      _db!.rawQuery('''
+        SELECT h.*, u.nombre AS maestro_nombre
+        FROM horarios h
+        JOIN usuarios u ON u.id = h.maestro_id
+        WHERE h.grupo_id = ?
+        ORDER BY h.dia, h.hora_inicio
+      ''', [grupoId]);
+
+  Future<List<Map<String, dynamic>>> horariosDetalladosPorMaestro(
+          int maestroId) =>
+      _db!.rawQuery('''
+        SELECT h.*, g.nombre AS grupo_nombre
+        FROM horarios h
+        JOIN grupos g ON g.id = h.grupo_id
+        WHERE h.maestro_id = ?
+        ORDER BY h.dia, h.hora_inicio
+      ''', [maestroId]);
 
   // ===================== TRABAJOS =====================
   Future<int> insertTrabajo(Trabajo t) async =>

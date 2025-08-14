@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../database/db_helper.dart';
 import '../../services/file_service.dart';
 import '../../database/models/usuario.dart';
@@ -30,10 +29,9 @@ class _CalificarTrabajoState extends State<CalificarTrabajo> {
   }
 
   Future<void> _editar(Trabajo t) async {
-    final gradeCtrl =
-        TextEditingController(text: t.calificacion?.toStringAsFixed(1) ?? '');
-    final fbCtrl =
-        TextEditingController(text: t.retroalimentacion ?? '');
+    final gradeCtrl = TextEditingController(
+        text: t.calificacion?.toStringAsFixed(1) ?? '');
+    final fbCtrl = TextEditingController(text: t.retroalimentacion ?? '');
 
     final ok = await showDialog<bool>(
           context: context,
@@ -75,9 +73,20 @@ class _CalificarTrabajoState extends State<CalificarTrabajo> {
 
     if (!ok) return;
 
+    // Validación 0–100
+    final gradeText = gradeCtrl.text.trim();
+    final grade = double.tryParse(gradeText);
+    if (grade == null || grade < 0 || grade > 100) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa una calificación válida (0–100)')),
+      );
+      return;
+    }
+
     await _db.calificarTrabajo(
       t.id!,
-      gradeCtrl.text.trim(),
+      grade.toString(),
       feedback: fbCtrl.text.trim().isEmpty ? null : fbCtrl.text.trim(),
     );
 
@@ -116,17 +125,14 @@ class _CalificarTrabajoState extends State<CalificarTrabajo> {
                     t.calificacion == null
                         ? Icons.pending_actions
                         : Icons.check_circle,
-                    color: t.calificacion == null
-                        ? Colors.orange
-                        : Colors.green,
+                    color: t.calificacion == null ? Colors.orange : Colors.green,
                   ),
                   title: Text(t.titulo),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Alumno: ${t.estudianteNombre ?? t.estudianteId}  •  Grupo ${t.grupoId}',
-                      ),
+                      Text('Alumno: ${t.estudianteNombre ?? t.estudianteId}'
+                          '  •  Grupo ${t.grupoId}'),
                       if (t.archivoPath != null && t.archivoPath!.isNotEmpty)
                         Text(
                           'Archivo: ${t.archivoPath}',
@@ -147,20 +153,16 @@ class _CalificarTrabajoState extends State<CalificarTrabajo> {
                         : t.calificacion!.toStringAsFixed(1),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: t.calificacion == null
-                          ? Colors.grey
-                          : Colors.green,
+                      color: t.calificacion == null ? Colors.grey : Colors.green,
                     ),
                   ),
-                  // Long press para abrir el archivo adjunto
                   onLongPress: () async {
                     if (t.archivoPath != null && t.archivoPath!.isNotEmpty) {
                       await FileService().openFile(t.archivoPath!);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content:
-                              Text('La entrega no tiene archivo adjunto'),
+                          content: Text('La entrega no tiene archivo adjunto'),
                         ),
                       );
                     }

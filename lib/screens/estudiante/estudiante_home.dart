@@ -10,25 +10,57 @@ class EstudianteHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final noGroup = user.grupoId == null;
+
     return Scaffold(
       appBar: AppBar(title: Text("Panel Estudiante - ${user.nombre}")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (noGroup)
+            const Card(
+              margin: EdgeInsets.only(bottom: 16),
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Aún no tienes grupo asignado. Pide ayuda al administrador.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
           ListTile(
             leading: const Icon(Icons.schedule),
             title: const Text("Ver horario del grupo"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HorarioEstudiante(user: user))),
+            enabled: !noGroup,
+            onTap: noGroup ? null
+                : () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HorarioEstudiante(user: user),
+                      ),
+                    ),
           ),
           ListTile(
             leading: const Icon(Icons.upload_file),
             title: const Text("Subir trabajo (Word/PDF)"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SubirTrabajo(estudiante: user))),
+            enabled: !noGroup,
+            onTap: noGroup ? null
+                : () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SubirTrabajo(estudiante: user),
+                      ),
+                    ),
           ),
           ListTile(
             leading: const Icon(Icons.grade),
             title: const Text("Ver calificaciones y feedback"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CalificacionesEstudiante(user: user))),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CalificacionesEstudiante(user: user),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           FilledButton(
