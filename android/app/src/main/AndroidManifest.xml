@@ -1,9 +1,12 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
-        android:label="utsc_teams"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.utsc_teams">
+
+<application
+        android:label="paola_teams"
+        android:name="${applicationName}">
+
         <activity
+            android:icon="@mipmap/ic_launcher"
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"

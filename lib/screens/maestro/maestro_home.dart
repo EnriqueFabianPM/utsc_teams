@@ -1,155 +1,88 @@
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
 import '../../database/db_helper.dart';
-import '../../database/models/usuario.dart';
-import '../../database/models/tarea.dart';
-
-import 'horario_maestro.dart';
-import 'calificar_trabajo.dart';
-import 'calificaciones_maestro.dart';
-import 'publicar_tarea.dart';
-import 'entregas_tarea.dart';
 
 class MaestroHome extends StatefulWidget {
-  final Usuario user;
-  const MaestroHome({super.key, required this.user});
-
-  @override
-  State<MaestroHome> createState() => _MaestroHomeState();
+  const MaestroHome({super.key});
+  @override State<MaestroHome> createState() => _MaestroHomeState();
 }
 
 class _MaestroHomeState extends State<MaestroHome> {
-  final _db = DBHelper();
+  bool _loading = true;
+  int _pendientes = 0;
+  int _calificadas = 0;
 
-  Future<int?> _elegirGrupoParaPublicar(BuildContext context) async {
-    // Tomamos los grupos donde el maestro tiene horario y su nombre
-    final det = await _db.horariosDetalladosPorMaestro(widget.user.id!);
-    if (det.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No tienes grupos asignados en horarios')),
-        );
-      }
-      return null;
-    }
-    // Mapa único: grupoId -> nombre
-    final Map<int, String> grupos = {};
-    for (final h in det) {
-      final gid = h['grupo_id'] as int;
-      grupos[gid] = h['grupo_nombre']?.toString() ?? 'Grupo $gid';
-    }
+  // TODO: usa el id del maestro logueado
+  static const int currentTeacherId = 2;
 
-    return showDialog<int>(
-      context: context,
-      builder: (_) => SimpleDialog(
-        title: const Text('Selecciona un grupo'),
-        children: grupos.entries
-            .map(
-              (e) => SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, e.key),
-            child: Text(e.value),
-          ),
-        )
-            .toList(),
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _cargarConteos();
   }
 
-  Future<Tarea?> _elegirTarea(BuildContext context) async {
-    final tareas = await _db.getTareasPorMaestro(widget.user.id!);
-    if (tareas.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Aún no has publicado tareas')),
-        );
-      }
-      return null;
-    }
-    return showDialog<Tarea>(
-      context: context,
-      builder: (_) => SimpleDialog(
-        title: const Text('Selecciona una tarea'),
-        children: tareas
-            .map(
-              (t) => SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, t),
-            child: Text(t.titulo),
-          ),
-        )
-            .toList(),
+  Future<Database> _db() async {
+    final helper = DBHelper();
+    return helper.db!;
+  }
+
+  Future<void> _cargarConteos() async {
+    final db = await _db();
+
+    // Pendientes = trabajos del maestro sin calificación
+    final pend = await db.rawQuery('''
+      SELECT COUNT(*) AS cnt
+      FROM trabajos
+      WHERE maestro_id = ? AND calificacion IS NULL
+    ''', [currentTeacherId]);
+
+    // Calificadas = trabajos del maestro con calificación
+    final calif = await db.rawQuery('''
+      SELECT COUNT(*) AS cnt
+      FROM trabajos
+      WHERE maestro_id = ? AND calificacion IS NOT NULL
+    ''', [currentTeacherId]);
+
+    setState(() {
+      _pendientes  = (pend.first['cnt'] as int?) ?? 0;
+      _calificadas = (calif.first['cnt'] as int?) ?? 0;
+      _loading = false;
+    });
+  }
+
+  Widget _tile(BuildContext ctx, {required IconData icon, required String title, String? subtitle, required VoidCallback onTap}) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: subtitle == null ? null : Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.user;
+    final resumen = _loading
+        ? 'Cargando...'
+        : 'Pendientes: $_pendientes  •  Calificadas: $_calificadas';
 
     return Scaffold(
-      appBar: AppBar(title: Text("Panel Maestro - ${user.nombre}")),
+      appBar: AppBar(title: const Text('Inicio (Maestro)')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         children: [
-          ListTile(
-            leading: const Icon(Icons.schedule),
-            title: const Text("Ver mi horario"),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => HorarioMaestro(user: user)),
-            ),
+          _tile(context,
+            icon: Icons.post_add,
+            title: 'Publicar tarea',
+            onTap: () => Navigator.pushNamed(context, '/maestro/publicar'),
           ),
-          ListTile(
-            leading: const Icon(Icons.assignment_add),
-            title: const Text("Publicar tarea"),
-            subtitle: const Text('Elige un grupo y crea una nueva tarea'),
-            onTap: () async {
-              final grupoId = await _elegirGrupoParaPublicar(context);
-              if (grupoId == null) return;
-              if (!mounted) return;
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PublicarTarea(maestro: user, grupoId: grupoId),
-                ),
-              );
-              setState(() {}); // por si luego quieres refrescar algo
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.fact_check),
-            title: const Text("Calificar entregas (todas)"),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => CalificarTrabajo(maestro: user)),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.folder_shared),
-            title: const Text("Ver entregas por tarea"),
-            subtitle: const Text('Selecciona una tarea publicada'),
-            onTap: () async {
-              final tarea = await _elegirTarea(context);
-              if (tarea == null) return;
-              if (!mounted) return;
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => EntregasTarea(tarea: tarea)),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.grade),
-            title: const Text("Mis calificaciones (editar)"),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CalificacionesMaestro(maestro: user),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar sesión'),
+          _tile(context,
+            icon: Icons.inbox,
+            title: 'Revisar entregas',
+            subtitle: resumen,
+            onTap: () => Navigator.pushNamed(context, '/maestro/entregas'),
           ),
         ],
       ),

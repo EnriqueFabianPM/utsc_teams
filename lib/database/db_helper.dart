@@ -140,52 +140,38 @@ class DBHelper {
 
     if (uCount == 0) {
       // Carreras & Semestres
-      final carId = await db.insert('carreras', {'nombre': 'TIC'});
-      final semId = await db.insert('semestres', {'nombre': '2025-A'});
+      final carId = await db.insert('carreras', {'nombre': 'Desarrollo de Software'});
+      final semId = await db.insert('semestres', {'nombre': '2022-04-31'});
 
       // Grupo demo
       final gId = await db.insert('grupos', Grupo(
-        nombre: '9-A',
+        nombre: '11-A',
         carreraId: carId,
         semestreId: semId,
       ).toMap());
 
       // Usuarios demo
       final maestroId = await db.insert('usuarios', {
-        'nombre': 'Profe Juan',
-        'email': 'juan@demo',
-        'password': '123',
+        'nombre': 'Maestra',
+        'email': 'paolamaestra@gmail.com',
+        'password': 'maestra123',
         'rol': 'maestro',
         'grupo_id': null
       });
 
       await db.insert('usuarios', {
-        'nombre': 'Admin',
-        'email': 'admin@demo',
-        'password': 'admin',
+        'nombre': 'Administrador',
+        'email': 'paolaadmin@virtual.utsc.edu.mx',
+        'password': 'admin123',
         'rol': 'admin',
         'grupo_id': null
       });
 
       // Estudiantes
       final alumnoId = await db.insert('usuarios', {
-        'nombre': 'Enrique Fabian Perez Medellin',
-        'email': '21024@virtual.utsc.edu.mx',
-        'password': '21024',
-        'rol': 'estudiante',
-        'grupo_id': gId
-      });
-      await db.insert('usuarios', {
-        'nombre': 'Paul Eduardo Torres Hernandez',
-        'email': '18167@virtual.utsc.edu.mx',
-        'password': '18167',
-        'rol': 'estudiante',
-        'grupo_id': gId
-      });
-      await db.insert('usuarios', {
-        'nombre': 'Enthan Andres Vazquez Vazquez',
-        'email': '16246@virtual.utsc.edu.mx',
-        'password': '16246',
+        'nombre': 'Paola Coronado Perez',
+        'email': 'paolacoronado@gmail.com',
+        'password': 'paola123',
         'rol': 'estudiante',
         'grupo_id': gId
       });
@@ -194,24 +180,24 @@ class DBHelper {
       await db.insert('horarios', {
         'grupo_id': gId,
         'dia': 'Lun',
-        'materia': 'Programación',
-        'hora_inicio': '08:00',
+        'materia': 'Programación de Modelos',
+        'hora_inicio': '07:00',
         'hora_fin': '09:30',
         'maestro_id': maestroId
       });
       await db.insert('horarios', {
         'grupo_id': gId,
         'dia': 'Mie',
-        'materia': 'BD',
-        'hora_inicio': '10:00',
+        'materia': 'Matematicas II',
+        'hora_inicio': '9:30',
         'hora_fin': '11:30',
         'maestro_id': maestroId
       });
 
       // Tarea demo (publicada por el maestro para el grupo)
       final tareaId = await db.insert('tareas', Tarea(
-        titulo: 'Proyecto 1',
-        descripcion: 'Sube tu Word/PDF',
+        titulo: 'Tarea 1',
+        descripcion: 'Sube tu trabajo',
         grupoId: gId,
         maestroId: maestroId,
         fechaEntrega: null,
@@ -219,8 +205,8 @@ class DBHelper {
 
       // Entrega demo (del primer alumno) ligada a la tarea
       await db.insert('trabajos', {
-        'titulo': 'Proyecto 1',
-        'descripcion': 'Mi entrega',
+        'titulo': 'Demo Tarea',
+        'descripcion': 'descripcion demo',
         'archivo_path': null,
         'grupo_id': gId,
         'estudiante_id': alumnoId,
