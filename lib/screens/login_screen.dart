@@ -20,35 +20,51 @@ class _LoginScreenState extends State<LoginScreen> {
   final DBHelper _dbHelper = DBHelper();
   String _errorMessage = "";
 
-  void _login() async {
-    String email = _emailController.text.trim();
-    String pass = _passwordController.text.trim();
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final pass  = _passwordController.text.trim();
 
     if (email.isEmpty || pass.isEmpty) {
-      setState(() {
-        _errorMessage = "Todos los campos son obligatorios";
-      });
+      setState(() => _errorMessage = "Todos los campos son obligatorios");
       return;
     }
 
-    Usuario? user = await _dbHelper.loginUser(email, pass);
+    final Usuario? user = await _dbHelper.loginUser(email, pass);
+
+    // ✅ evita usar BuildContext si el widget ya no está montado
+    if (!mounted) return;
+
     if (user != null) {
       setState(() => _errorMessage = "");
+
       if (user.rol == "admin") {
         Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (_) => const AdminHome()));
+          context,
+          MaterialPageRoute(builder: (_) => const AdminHome()),
+        );
       } else if (user.rol == "maestro") {
+        // ❌ Antes: MaestroHome(user: user)  -> esa prop no existe
         Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (_) => MaestroHome(user: user)));
+          context,
+          MaterialPageRoute(builder: (_) => const MaestroHome()),
+        );
       } else {
+        // ❌ Antes: EstudianteHome(user: user) -> esa prop no existe
         Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (_) => EstudianteHome(user: user)));
+          context,
+          MaterialPageRoute(builder: (_) => const EstudianteHome()),
+        );
       }
     } else {
-      setState(() {
-        _errorMessage = "Credenciales incorrectas";
-      });
+      setState(() => _errorMessage = "Credenciales incorrectas");
     }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -66,9 +82,10 @@ class _LoginScreenState extends State<LoginScreen> {
               CustomTextField(controller: _emailController, hint: "Correo"),
               const SizedBox(height: 10),
               CustomTextField(
-                  controller: _passwordController,
-                  hint: "Contraseña",
-                  obscure: true),
+                controller: _passwordController,
+                hint: "Contraseña",
+                obscure: true,
+              ),
               const SizedBox(height: 20),
               if (_errorMessage.isNotEmpty)
                 Text(_errorMessage, style: const TextStyle(color: Colors.red)),

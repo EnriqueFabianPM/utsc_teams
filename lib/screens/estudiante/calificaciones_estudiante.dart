@@ -1,57 +1,96 @@
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
 import '../../database/db_helper.dart';
-import '../../database/models/trabajo.dart';
-import '../../database/models/usuario.dart';
 
-class CalificacionesEstudiante extends StatelessWidget {
-  final Usuario user;
-  const CalificacionesEstudiante({super.key, required this.user});
+class CalificacionesEstudiantePage extends StatefulWidget {
+  const CalificacionesEstudiantePage({super.key});
 
-  Color _gradeColor(double? g) {
-    if (g == null) return Colors.grey;
-    if (g >= 90) return Colors.green;
-    if (g >= 70) return Colors.orange;
-    return Colors.red;
-    }
+  @override
+  State<CalificacionesEstudiantePage> createState() => _CalificacionesEstudiantePageState();
+}
+
+class _CalificacionesEstudiantePageState extends State<CalificacionesEstudiantePage> {
+  bool _loading = true;
+  List<_ItemCalif> _items = [];
+
+  // TODO: id real del alumno logueado
+  static const int currentUserId = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<Database> _getDb() async {
+    final helper = DBHelper();
+    return helper.db!;
+  }
+
+  Future<void> _load() async {
+    final db = await _getDb();
+
+    final rows = await db.rawQuery('''
+      SELECT
+        ta.titulo AS titulo_tarea,
+        t.titulo  AS titulo_envio,
+        t.retroalimentacion AS retro,
+        t.calificacion AS puntos
+      FROM trabajos t
+      LEFT JOIN tareas ta ON ta.id = t.tarea_id
+      WHERE t.estudiante_id = ?
+      ORDER BY t.id DESC
+    ''', [currentUserId]);
+
+    setState(() {
+      _items = rows.map((m) => _ItemCalif(
+        tituloTarea: (m['titulo_tarea'] ?? 'Tarea') as String,
+        tituloEnvio: (m['titulo_envio'] ?? '') as String,
+        puntos     : (m['puntos'] as num?)?.toDouble(),
+        retro      : (m['retro'] ?? '') as String,
+      )).toList();
+      _loading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final db = DBHelper();
     return Scaffold(
       appBar: AppBar(title: const Text('Mis calificaciones')),
-      body: FutureBuilder<List<Trabajo>>(
-        future: db.getTrabajosPorEstudiante(user.id!),
-        builder: (_, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final items = snap.data!;
-          if (items.isEmpty) return const Center(child: Text('No hay trabajos todavía'));
-          return ListView.separated(
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final t = items[i];
-              return ListTile(
-                title: Text(t.titulo),
-                subtitle: Text(t.retroalimentacion == null || t.retroalimentacion!.isEmpty
-                    ? 'Sin feedback'
-                    : 'Feedback: ${t.retroalimentacion}'),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _gradeColor(t.calificacion).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _gradeColor(t.calificacion)),
-                  ),
-                  child: Text(
-                    t.calificacion == null ? '—' : t.calificacion!.toStringAsFixed(1),
-                    style: TextStyle(color: _gradeColor(t.calificacion), fontWeight: FontWeight.bold),
-                  ),
-                ),
-              );
-            },
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _items.isEmpty
+          ? const Center(child: Text('Aún no tienes calificaciones'))
+          : ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: _items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final it = _items[i];
+          final estado = it.puntos == null ? 'Pendiente' : 'Calificado: ${it.puntos!.toStringAsFixed(1)}';
+          final subt = [
+            if (it.tituloEnvio.isNotEmpty) 'Envío: ${it.tituloEnvio}',
+            estado,
+            if (it.retro.isNotEmpty) 'Retro: ${it.retro}',
+          ].join('\n');
+          return Card(
+            child: ListTile(
+              leading: Icon(it.puntos == null ? Icons.hourglass_bottom : Icons.check_circle),
+              title: Text(it.tituloTarea),
+              subtitle: Text(subt),
+              isThreeLine: true,
+            ),
           );
         },
       ),
     );
   }
+}
+
+class _ItemCalif {
+  final String tituloTarea;
+  final String tituloEnvio;
+  final double? puntos;
+  final String retro;
+  _ItemCalif({required this.tituloTarea, required this.tituloEnvio, required this.puntos, required this.retro});
 }

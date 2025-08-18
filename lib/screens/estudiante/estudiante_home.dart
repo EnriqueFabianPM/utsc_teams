@@ -1,74 +1,30 @@
 import 'package:flutter/material.dart';
-import '../../database/models/usuario.dart';
-import 'horario_estudiante.dart';
-import 'calificaciones_estudiante.dart';
-import 'tareas_estudiante.dart';
 
 class EstudianteHome extends StatelessWidget {
-  final Usuario user;
-  const EstudianteHome({super.key, required this.user});
+  const EstudianteHome({super.key});
+
+  Widget _card(BuildContext ctx, {required IconData icon, required String title, required String route}) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.pushNamed(ctx, route),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final noGroup = user.grupoId == null;
-
     return Scaffold(
-      appBar: AppBar(title: Text("Panel Estudiante - ${user.nombre}")),
+      appBar: AppBar(title: const Text('Inicio (Estudiante)')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         children: [
-          if (noGroup)
-            const Card(
-              margin: EdgeInsets.only(bottom: 16),
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: Text(
-                  'Aún no tienes grupo asignado. Pide ayuda al administrador.',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ListTile(
-            leading: const Icon(Icons.schedule),
-            title: const Text("Ver horario del grupo"),
-            enabled: !noGroup,
-            onTap: noGroup
-                ? null
-                : () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => HorarioEstudiante(user: user),
-              ),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.assignment),
-            title: const Text("Tareas del grupo"),
-            enabled: !noGroup,
-            onTap: noGroup
-                ? null
-                : () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => TareasEstudiante(alumno: user),
-              ),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.grade),
-            title: const Text("Ver calificaciones y feedback"),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CalificacionesEstudiante(user: user),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar sesión'),
-          ),
+          _card(context, icon: Icons.check_circle, title: 'Calificaciones', route: '/estudiante/calif'),
+          _card(context, icon: Icons.schedule,     title: 'Horario',        route: '/estudiante/horario'),
+          // Cuando tengamos TareasEstudiante sin params requeridos, reactivamos:
+          // _card(context, icon: Icons.assignment,    title: 'Tareas',         route: '/estudiante/tareas'),
         ],
       ),
     );
