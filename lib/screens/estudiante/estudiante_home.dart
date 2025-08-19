@@ -21,10 +21,9 @@ class EstudianteHome extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          _card(context, icon: Icons.check_circle, title: 'Calificaciones', route: '/estudiante/calif'),
-          _card(context, icon: Icons.schedule,     title: 'Horario',        route: '/estudiante/horario'),
-          // Cuando tengamos TareasEstudiante sin params requeridos, reactivamos:
-          // _card(context, icon: Icons.assignment,    title: 'Tareas',         route: '/estudiante/tareas'),
+          _card(context, icon: Icons.assignment,      title: 'Tareas',         route: '/estudiante/tareas'),
+          _card(context, icon: Icons.check_circle,    title: 'Calificaciones', route: '/estudiante/calif'),
+          _card(context, icon: Icons.schedule,        title: 'Horario',        route: '/estudiante/horario'),
         ],
       ),
     );

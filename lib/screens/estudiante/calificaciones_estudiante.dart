@@ -13,8 +13,8 @@ class _CalificacionesEstudiantePageState extends State<CalificacionesEstudianteP
   bool _loading = true;
   List<_ItemCalif> _items = [];
 
-  // TODO: id real del alumno logueado
-  static const int currentUserId = 3;
+  // TODO: reemplazar por el id del usuario logueado (de tu sesión)
+  static const int currentUserId = 3; // Ana Alumna demo
 
   @override
   void initState() {
@@ -22,35 +22,42 @@ class _CalificacionesEstudiantePageState extends State<CalificacionesEstudianteP
     _load();
   }
 
-  Future<Database> _getDb() async {
-    final helper = DBHelper();
-    return helper.db!;
-  }
-
   Future<void> _load() async {
     final db = await _getDb();
 
+    // JOIN: trabajos (envíos) + calificaciones + tareas
     final rows = await db.rawQuery('''
       SELECT
-        ta.titulo AS titulo_tarea,
-        t.titulo  AS titulo_envio,
-        t.retroalimentacion AS retro,
-        t.calificacion AS puntos
-      FROM trabajos t
-      LEFT JOIN tareas ta ON ta.id = t.tarea_id
-      WHERE t.estudiante_id = ?
-      ORDER BY t.id DESC
+        t.titulo AS titulo_tarea,
+        tr.fecha_envio AS fecha_envio,
+        c.puntos AS puntos,
+        c.retroalimentacion AS retro
+      FROM trabajos tr
+      LEFT JOIN calificaciones c ON c.envio_id = tr.id
+      LEFT JOIN tareas t ON t.id = tr.tarea_id
+      WHERE tr.estudiante_id = ?
+      ORDER BY tr.fecha_envio DESC
     ''', [currentUserId]);
 
     setState(() {
       _items = rows.map((m) => _ItemCalif(
         tituloTarea: (m['titulo_tarea'] ?? 'Tarea') as String,
-        tituloEnvio: (m['titulo_envio'] ?? '') as String,
+        fechaEnvio : (m['fecha_envio'] ?? '') as String,
         puntos     : (m['puntos'] as num?)?.toDouble(),
         retro      : (m['retro'] ?? '') as String,
       )).toList();
       _loading = false;
     });
+  }
+
+  Future<Database> _getDb() async {
+    // Ajusta esto a tu helper real si es distinto
+    // 1) Singleton:
+    // return DBHelper.instance.database;
+    // 2) Clase:
+    final helper = DBHelper();
+    // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+    return await helper.database;
   }
 
   @override
@@ -68,29 +75,34 @@ class _CalificacionesEstudiantePageState extends State<CalificacionesEstudianteP
         itemBuilder: (_, i) {
           final it = _items[i];
           final estado = it.puntos == null ? 'Pendiente' : 'Calificado: ${it.puntos!.toStringAsFixed(1)}';
-          final subt = [
-            if (it.tituloEnvio.isNotEmpty) 'Envío: ${it.tituloEnvio}',
-            estado,
-            if (it.retro.isNotEmpty) 'Retro: ${it.retro}',
-          ].join('\n');
           return Card(
             child: ListTile(
-              leading: Icon(it.puntos == null ? Icons.hourglass_bottom : Icons.check_circle),
               title: Text(it.tituloTarea),
-              subtitle: Text(subt),
-              isThreeLine: true,
+              subtitle: Text('Entregado: ${_fmt(it.fechaEnvio)}\n$estado'
+                  '${it.retro.isNotEmpty ? '\nRetro: ${it.retro}' : ''}'),
+              leading: Icon(it.puntos == null ? Icons.hourglass_bottom : Icons.check_circle),
             ),
           );
         },
       ),
     );
   }
+
+  String _fmt(String iso) {
+    if (iso.isEmpty) return '-';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}/${dt.year} ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
 }
 
 class _ItemCalif {
   final String tituloTarea;
-  final String tituloEnvio;
+  final String fechaEnvio;
   final double? puntos;
   final String retro;
-  _ItemCalif({required this.tituloTarea, required this.tituloEnvio, required this.puntos, required this.retro});
+  _ItemCalif({required this.tituloTarea, required this.fechaEnvio, required this.puntos, required this.retro});
 }

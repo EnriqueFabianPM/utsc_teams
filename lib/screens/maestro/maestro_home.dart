@@ -12,6 +12,7 @@ class _MaestroHomeState extends State<MaestroHome> {
   int _pendientes = 0;
   int _calificadas = 0;
 
+  // TODO: usa el id del maestro logueado
   static const int currentTeacherId = 2;
 
   @override
@@ -27,8 +28,21 @@ class _MaestroHomeState extends State<MaestroHome> {
 
   Future<void> _cargarConteos() async {
     final db = await _db();
-    final pend = await db.rawQuery('SELECT COUNT(*) AS cnt FROM trabajos WHERE maestro_id=? AND calificacion IS NULL',[currentTeacherId]);
-    final calif = await db.rawQuery('SELECT COUNT(*) AS cnt FROM trabajos WHERE maestro_id=? AND calificacion IS NOT NULL',[currentTeacherId]);
+
+    // Pendientes = trabajos del maestro sin calificación
+    final pend = await db.rawQuery('''
+      SELECT COUNT(*) AS cnt
+      FROM trabajos
+      WHERE maestro_id = ? AND calificacion IS NULL
+    ''', [currentTeacherId]);
+
+    // Calificadas = trabajos del maestro con calificación
+    final calif = await db.rawQuery('''
+      SELECT COUNT(*) AS cnt
+      FROM trabajos
+      WHERE maestro_id = ? AND calificacion IS NOT NULL
+    ''', [currentTeacherId]);
+
     setState(() {
       _pendientes  = (pend.first['cnt'] as int?) ?? 0;
       _calificadas = (calif.first['cnt'] as int?) ?? 0;
@@ -36,21 +50,40 @@ class _MaestroHomeState extends State<MaestroHome> {
     });
   }
 
+  Widget _tile(BuildContext ctx, {required IconData icon, required String title, String? subtitle, required VoidCallback onTap}) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: subtitle == null ? null : Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final resumen = _loading ? 'Cargando...' : 'Pendientes: $_pendientes  •  Calificadas: $_calificadas';
+    final resumen = _loading
+        ? 'Cargando...'
+        : 'Pendientes: $_pendientes  •  Calificadas: $_calificadas';
+
     return Scaffold(
       appBar: AppBar(title: const Text('Inicio (Maestro)')),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          Card(child: ListTile(
-            leading: const Icon(Icons.inbox),
-            title: const Text('Revisar entregas'),
-            subtitle: Text(resumen),
-            trailing: const Icon(Icons.chevron_right),
+          _tile(context,
+            icon: Icons.post_add,
+            title: 'Publicar tarea',
+            onTap: () => Navigator.pushNamed(context, '/maestro/publicar'),
+          ),
+          _tile(context,
+            icon: Icons.inbox,
+            title: 'Revisar entregas',
+            subtitle: resumen,
             onTap: () => Navigator.pushNamed(context, '/maestro/entregas'),
-          )),
+          ),
         ],
       ),
     );
